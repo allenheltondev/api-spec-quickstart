@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Generate API spec from entity
+
+Globals:
+  Function:
+    Runtime: nodejs18.x
+    Architectures:
+      - arm64
+    Tracing: Active
+    Timeout: 30
+    MemorySize: 1024
+    Handler: index.handler
+    Environment:
+      Variables:
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+
+Resources:
+  SpecApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      TracingEnabled: true
+      StageName: v1
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: ./openapi.yaml
+
+  GenerateSpecFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/generate-spec
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action: bedrock:InvokeModel
+              Resource: '*'
+      Events:
+        FromApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SpecApi
+            Path: /specs
+            Method: POST
+
+Outputs:
+  GenerateSpecEndpoint:
+    Description: Endpoint to POST for spec generation
+    Value: !Sub https://${SpecApi}.execute-api.${AWS::Region}.amazonaws.com/v1/specs
